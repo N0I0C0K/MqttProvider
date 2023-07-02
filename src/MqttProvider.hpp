@@ -31,7 +31,9 @@ public:
     const String nodeid;
     int (*readSensorData)(void);
     void (*writeControllerData)(int);
+
     int pre_data = 0;
+    unsigned long last_change_time = 0;
     MqttNode(NodeType _type, const String& _nodeid, int (*_readSensorData)(void), void (*_writeControllerData)(int))
         : type(_type)
         , nodeid(_nodeid)
@@ -60,7 +62,14 @@ public:
     {
         int cur_data = readSensorData();
         if (cur_data != pre_data) {
+            // Jitter cancellation
+            if (this->type == NodeType::BOOL_CONTROLLER || this->type == NodeType::NUM_CONTROLLER) {
+                if (millis() - last_change_time < 5000 && cur_data - pre_data <= 2) {
+                    return false;
+                }
+            }
             pre_data = cur_data;
+            last_change_time = millis();
             return true;
         }
         return false;
@@ -204,7 +213,6 @@ void regist_node(NodeType type, int (*readSensorData)(void), void (*writeControl
             writeControllerData(readSensorData());
         }
     }
-
     Serial.printf("regist node: %s\n", node->to_string().c_str());
 }
 
