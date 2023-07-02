@@ -4,7 +4,7 @@
 
 namespace Mqtt {
 
-const char broker[] = "test.mosquitto.org";
+const char broker[] = "broker-cn.emqx.io";
 const int borker_port = 1883;
 const char* topic_base = nullptr;
 
@@ -88,13 +88,13 @@ public:
                 this->control(this->readSensorData());
             }
         }
-        Serial.printf("regist node: %s\n", this->to_string().c_str());
+        Serial.printf("regist node: %s\n", this->alive_string().c_str());
         is_regist = true;
     }
 
-    String to_string()
+    String alive_string()
     {
-        return nodeid + "|" + String(type) + "|" + node_name + "|" + node_pos;
+        return nodeid + "|" + String(type) + "|" + node_name + "|" + node_pos + "|" + String(readSensorData());
     }
     void sendData()
     {
@@ -116,13 +116,14 @@ public:
         int cur_data = readSensorData();
         if (cur_data != pre_data) {
             // Jitter cancellation
-            if (this->type == NodeType::BOOL_CONTROLLER || this->type == NodeType::NUM_CONTROLLER) {
-                if (millis() - last_change_time < 5000 && cur_data - pre_data <= 2) {
+            unsigned long now = millis();
+            if (this->type == NodeType::NUM_SENSOR || this->type == NodeType::NUM_CONTROLLER) {
+                if ((now - last_change_time < 1000) || (now - last_change_time < 5000 && cur_data - pre_data <= 10)) {
                     return false;
                 }
             }
             pre_data = cur_data;
-            last_change_time = millis();
+            last_change_time = now;
             return true;
         }
         return false;
@@ -162,7 +163,7 @@ TopicType getTopicType(const String& topic)
         return TopicType::ALIVE;
     } else if (strContainStr(topic, "sensor")) {
         return TopicType::SENSOR;
-    } else if (strContainStr(topic, "controller")) {
+    } else if (strContainStr(topic, "control")) {
         return TopicType::CONTROLLER;
     }
     return TopicType::ALIVE;
@@ -174,8 +175,9 @@ void send_alive()
     sprintf(tp, "%s/listen/center/alive", topic_base);
     mqttclient.beginMessage(tp);
     for (int i = 0; i < node_num; ++i) {
-        mqttclient.print(nodes[i]->to_string());
-        mqttclient.print('|');
+        mqttclient.print(nodes[i]->alive_string());
+        if (i != node_num - 1)
+            mqttclient.print('|');
     }
     mqttclient.endMessage();
 }

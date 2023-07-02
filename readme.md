@@ -129,7 +129,7 @@ node 是指每一个节点，每块板子上有多个 node
   - base/publish/sensor/nodeid
 
   - controller(如果是受控器)
-    - base/control/nodeid
+    - base/publish/control/nodeid
 
 ### alive
 
