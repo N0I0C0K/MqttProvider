@@ -23,27 +23,78 @@ enum TopicType {
     SENSOR = 1,
     CONTROLLER = 2
 };
+class MqttNode;
+
+const int max_node_num = 8;
+MqttNode* nodes[max_node_num];
+int node_num = 0;
 
 class MqttNode {
 private:
 public:
     NodeType type;
     const String nodeid;
+    const String node_name; // node 的名字，如：温度传感器，台灯
+    const String node_pos; // node 的位置，如：客厅
     int (*readSensorData)(void);
-    void (*writeControllerData)(int);
-
+    void (*writeControllerData)(int) = nullptr;
     int pre_data = 0;
     unsigned long last_change_time = 0;
-    MqttNode(NodeType _type, const String& _nodeid, int (*_readSensorData)(void), void (*_writeControllerData)(int))
+    bool is_regist = false;
+
+    /// @brief Construct a new Mqtt Node object
+    /// @param _type node 的类型
+    /// @param _nodename node 的名字，如：温度传感器，台灯
+    /// @param _node_pos node 的位置，如：客厅
+    /// @param _readSensorData 节点数据读取函数，需要返回一个int
+    /// @param _writeControllerData 节点数据写入函数，需要接受一个int(0-100)，不管是bool类型还是num类型, 如果是传感器则不需要
+    /// @param auto_regist 是否自动注册到节点列表
+    MqttNode(NodeType _type,
+        const String& _nodename,
+        const String& _node_pos,
+        int (*_readSensorData)(void),
+        void (*_writeControllerData)(int) = nullptr,
+        bool auto_regist = true)
         : type(_type)
-        , nodeid(_nodeid)
+        , nodeid(random_id())
+        , node_name(_nodename)
+        , node_pos(_node_pos)
         , readSensorData(_readSensorData)
         , writeControllerData(_writeControllerData)
     {
+        if (auto_regist)
+            this->regist();
     }
+
+    void regist(bool initController = true)
+    {
+        if (is_regist)
+            return;
+        if (node_num >= max_node_num) {
+            return;
+        }
+        nodes[node_num++] = this;
+        const String& nodeid = this->nodeid;
+        char tp[50];
+        sprintf(tp, "%s/listen/sensor/%s", topic_base, nodeid.c_str());
+        mqttclient.subscribe(tp);
+
+        if (this->type == NodeType::BOOL_CONTROLLER || this->type == NodeType::NUM_CONTROLLER) {
+            sprintf(tp, "%s/publish/control/%s", topic_base, nodeid.c_str());
+            mqttclient.subscribe(tp);
+
+            // init controller
+            if (initController) {
+                this->control(this->readSensorData());
+            }
+        }
+        Serial.printf("regist node: %s\n", this->to_string().c_str());
+        is_regist = true;
+    }
+
     String to_string()
     {
-        return nodeid + "|" + String(type);
+        return nodeid + "|" + String(type) + "|" + node_name + "|" + node_pos;
     }
     void sendData()
     {
@@ -56,6 +107,8 @@ public:
     }
     void control(const int& val)
     {
+        if (writeControllerData == nullptr)
+            return;
         writeControllerData(val);
     }
     bool change()
@@ -75,10 +128,6 @@ public:
         return false;
     }
 };
-
-const int max_node_num = 8;
-MqttNode* nodes[max_node_num];
-int node_num = 0;
 
 void onMqttMessage(int size);
 
@@ -184,36 +233,6 @@ void onMqttMessage(int size)
         Serial.println("unknown command");
         break;
     }
-}
-
-/// @brief 注册节点
-/// @param type 节点类型
-/// @param readSensorData 节点数据读取函数，需要返回一个int
-/// @param writeControllerData 节点数据写入函数，需要接受一个int(0-100)，不管是bool类型还是num类型
-/// @param initController 是否初始化控制器，如果是控制器节点，是否初始化控制器
-void regist_node(NodeType type, int (*readSensorData)(void), void (*writeControllerData)(int), bool initController = true)
-{
-    if (node_num >= max_node_num) {
-        return;
-    }
-    String nodeid = random_id();
-    MqttNode* node = new MqttNode(type, nodeid, readSensorData, writeControllerData);
-    nodes[node_num++] = node;
-
-    char tp[50];
-    sprintf(tp, "%s/listen/sensor/%s", topic_base, nodeid.c_str());
-    mqttclient.subscribe(tp);
-
-    if (type == NodeType::BOOL_CONTROLLER || type == NodeType::NUM_CONTROLLER) {
-        sprintf(tp, "%s/publish/control/%s", topic_base, nodeid.c_str());
-        mqttclient.subscribe(tp);
-
-        // init controller
-        if (initController) {
-            writeControllerData(readSensorData());
-        }
-    }
-    Serial.printf("regist node: %s\n", node->to_string().c_str());
 }
 
 void checkSensorDataChange()

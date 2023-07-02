@@ -2,7 +2,6 @@
 #include <ESP8266WiFi.h>
 #include <MqttProvider.hpp>
 
-
 namespace LED_1 {
 
 const int led_pin = D5;
@@ -46,7 +45,8 @@ void setup()
 {
     Serial.begin(115200);
     Mqtt::init("不醒人室", "5050505050", "acddb");
-    Mqtt::regist_node(Mqtt::BOOL_CONTROLLER, LED_1::get_led_stat, LED_1::set_led);
+    Mqtt::MqttNode* led_node = new Mqtt::MqttNode(Mqtt::BOOL_CONTROLLER, "台灯", "客厅", LED_1::get_led_stat, LED_1::set_led);
+    Mqtt::send_alive();
 
     LED_1::led_setup();
 }

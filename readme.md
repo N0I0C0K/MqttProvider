@@ -87,7 +87,7 @@ node 是指每一个节点，每块板子上有多个 node
 
 注：节点类型：1:bool 传感器，2:数值传感器，11：bool 控制器，12:数值控制器，子类型：1.开关 2.温度 3.湿度
 
-消息构造`nodeid|nodtype`
+消息构造`nodeid|nodtype|node name|node position`
 举例：`aacude|1`表示 node aacude 一个 bool 传感器存活
 
 ---
