@@ -2,57 +2,99 @@
 #include <ESP8266WiFi.h>
 #include <MqttProvider.hpp>
 
-namespace LED_1 {
+namespace RLED {
 
 const int led_pin = D5;
-const int btn_pin = D6;
+const int btn_pin = D3;
 
-uint8_t led_stat = LOW;
-uint8_t last_btn_stat = HIGH;
+int led_stat = LOW;
+int last_btn_stat = HIGH;
 
-void led_setup()
-{
-    pinMode(led_pin, OUTPUT);
-    pinMode(btn_pin, INPUT_PULLUP);
-}
-
-void set_led(int stat)
+void set_rtrm_led(int stat)
 {
     led_stat = stat ? HIGH : LOW;
     digitalWrite(led_pin, led_stat);
 }
 
-int get_led_stat()
+int get_rtrm_led_stat()
 {
     return led_stat;
 }
 
-void loop()
+void rled_setup()
 {
-    uint8_t btn_stat = digitalRead(btn_pin);
+    pinMode(led_pin, OUTPUT);
+    pinMode(btn_pin, INPUT_PULLUP);
+}
+
+void rled_loop()
+{
+    int btn_stat = digitalRead(btn_pin);
     if (btn_stat != last_btn_stat) {
         last_btn_stat = btn_stat;
         if (btn_stat == LOW) {
             Serial.println('D');
-            set_led(!led_stat);
+            set_rtrm_led(!led_stat);
         }
     }
 }
+}
+namespace RWater {
+int waterSensor = A0; // 水位传感器模拟输入引脚
+int Buzzer = D1; // LED数字输出引脚
+int led = D4;
 
-} // namespace LED_1
+int water_stat = 0;
+unsigned long last_change_time = 0;
+double temp, data;
 
+int get_rtrm_water_stat()
+{
+    return water_stat;
+}
+void rwater_setup()
+{
+    pinMode(waterSensor, INPUT);
+    pinMode(Buzzer, OUTPUT);
+    pinMode(led, OUTPUT);
+}
+void rwater_loop()
+{
+    double temp = analogRead(waterSensor); // 读取水位传感器的值
+    data = (temp / 650) * 4;
+    if (data > 1) { // 当水位高于设定值时，蜂鸣器报警，LED频闪红灯
+        digitalWrite(Buzzer, LOW);
+        water_stat = 1;
+        unsigned int t = millis();
+        if (t - last_change_time < 100) {
+            digitalWrite(led, HIGH);
+        } else if (t - last_change_time < 200) {
+            digitalWrite(led, LOW);
+        } else {
+            last_change_time = t;
+        }
+    } else { // 当水位高于设定值时，关闭蜂鸣器和LED
+        digitalWrite(Buzzer, HIGH);
+        digitalWrite(led, LOW);
+        water_stat = 0;
+    }
+}
+}
 void setup()
 {
     Serial.begin(115200);
-    Mqtt::init("不醒人室", "5050505050", "acddb");
-    Mqtt::MqttNode* led_node = new Mqtt::MqttNode(Mqtt::BOOL_CONTROLLER, "台灯", "客厅", LED_1::get_led_stat, LED_1::set_led);
-    Mqtt::send_alive();
+    RLED::rled_setup();
+    RWater::rwater_setup();
 
-    LED_1::led_setup();
+    Mqtt::init("YH HUAWEI PHONE", "yuanhao123@@@", "acddb");
+    Mqtt::MqttNode* led_node = new Mqtt::MqttNode(Mqtt::BOOL_CONTROLLER, "灯光", "卫生间", RLED::get_rtrm_led_stat, RLED::set_rtrm_led);
+    Mqtt::MqttNode* water_node = new Mqtt::MqttNode(Mqtt::BOOL_SENSOR, "水位传感", "卫生间", RWater::get_rtrm_water_stat);
+    Mqtt::send_alive();
 }
 
 void loop()
 {
+    RLED::rled_loop();
+    RWater::rwater_loop();
     Mqtt::loop();
-    LED_1::loop();
 }

@@ -24,14 +24,9 @@ bool strContainStr(const String& tar, const char* conta)
     return false;
 }
 
-String random_id()
+String unique_id(uint8_t k = 0)
 {
-    char id[7];
-    for (uint8_t i = 0; i < 6; ++i) {
-        id[i] = abc[random(0, 26)];
-    }
-    id[6] = '\0';
-    return String(id);
+    return String(ESP.getChipId(), HEX) + String(k);
 }
 
 String getNodeIdFromTopic(const String& topic)

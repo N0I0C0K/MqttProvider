@@ -3,9 +3,6 @@
 #include <ESP8266WiFi.h>
 
 namespace Mqtt {
-
-const char broker[] = "broker-cn.emqx.io";
-const int borker_port = 1883;
 const char* topic_base = nullptr;
 
 WiFiClient wificlient;
@@ -27,7 +24,7 @@ class MqttNode;
 
 const int max_node_num = 8;
 MqttNode* nodes[max_node_num];
-int node_num = 0;
+uint8_t node_num = 0;
 
 class MqttNode {
 private:
@@ -56,7 +53,7 @@ public:
         void (*_writeControllerData)(int) = nullptr,
         bool auto_regist = true)
         : type(_type)
-        , nodeid(random_id())
+        , nodeid(unique_id(node_num))
         , node_name(_nodename)
         , node_pos(_node_pos)
         , readSensorData(_readSensorData)
@@ -132,7 +129,18 @@ public:
 
 void onMqttMessage(int size);
 
-void init(const char* ssid, const char* ssid_pwd, const char* _topic_base)
+/// @brief 初始化mqtt
+/// @param ssid wifi ssid
+/// @param ssid_pwd wifi密码
+/// @param _topic_base topic的前缀，所有节点保持一致
+/// @param _broker mqtt服务器地址，默认不变
+/// @param _borker_port mqtt端口，默认不变
+void init(
+    const char* ssid,
+    const char* ssid_pwd,
+    const char* _topic_base,
+    const char* _broker = "broker-cn.emqx.io",
+    int _borker_port = 1883)
 {
     WiFi.begin(ssid, ssid_pwd);
     while (WiFi.status() != WL_CONNECTED) {
@@ -140,11 +148,15 @@ void init(const char* ssid, const char* ssid_pwd, const char* _topic_base)
         delay(1000);
     }
     Serial.println("connect net success");
+    // log ip info
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
 
-    if (!mqttclient.connect(broker, borker_port)) {
+    if (!mqttclient.connect(_broker, _borker_port)) {
         Serial.print("MQTT connection failed! Error code = ");
         Serial.println(mqttclient.connectError());
-        while (1) { }
+        while (1) {
+        }
     }
     Serial.println("connect to mqtt success!");
 
@@ -246,10 +258,17 @@ void checkSensorDataChange()
     }
 }
 
+unsigned long last_alive_time = 0;
+
 void loop()
 {
     mqttclient.poll();
     checkSensorDataChange();
+    // send alive every 30s
+    if (millis() - last_alive_time > 30000) {
+        send_alive();
+        last_alive_time = millis();
+    }
 }
 
 }
