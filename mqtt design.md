@@ -1,7 +1,5 @@
 # Mqtt topic 设计
 
-[English](./readme_en.md)
-
 ## 框架
 
 - 板子
