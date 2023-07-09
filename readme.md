@@ -1,5 +1,7 @@
 # Mqtt Provider
 
+[English](./readme_en.md)
+
 mqtt provider 是一个 mqtt 包装库，它可以让你只需要几行代码就可以将一个节点接入远程控制。你可以使用自己的界面，也可以使用我准备好的[界面](https://github.com/N0I0C0K/smart-home-front)
 
 ## 如何接入

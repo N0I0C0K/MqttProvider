@@ -1,7 +1,5 @@
 # Mqtt Provider
 
-[English](./readme_en.md)
-
 Mqtt Provider is an MQTT wrapper library that allows you to connect a node to remote control with just a few lines of code. You can use your own interface or utilize the provided [interface](https://github.com/N0I0C0K/smart-home-front).
 
 ## How to Connect
