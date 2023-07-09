@@ -181,6 +181,15 @@ TopicType getTopicType(const String& topic)
     return TopicType::ALIVE;
 }
 
+void send_test()
+{
+    char tp[50];
+    sprintf(tp, "%s/test/message", topic_base);
+    mqttclient.beginMessage(tp);
+    mqttclient.print("test");
+    mqttclient.endMessage();
+}
+
 void send_alive()
 {
     char tp[50];

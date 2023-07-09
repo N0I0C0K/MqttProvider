@@ -1,182 +1,78 @@
-# Mqtt topic 设计
+# Mqtt Provider
 
-## 框架
+mqtt provider 是一个 mqtt 包装库，它可以让你只需要几行代码就可以将一个节点接入远程控制。你可以使用自己的界面，也可以使用我准备好的[界面](https://github.com/N0I0C0K/smart-home-front)
 
-- 板子
-  - 传感器（温度、湿度等）
-  - 受控器（灯光、舵机等）
-- MQTT 服务器
-- 终端控制器
-  - 网页终端
-  - 手机终端
+## 如何接入
 
-## 名词规范
+### 1. 传感器节点需要支持以下函数
 
-我们将上述的
+- `int get()`函数，他返回一个 0-100 的数组，代表这个节点检测值。如果是一个 bool 类型只需要返回 0/1。
+- 受控器还需要支持`void set(int val)`函数，函数接受一个 val(0-100)
 
-- ”板子“ -> platform
-- 板子上的传感器，受控器 -> node
-- 终端控制器称为 -> center
+**示例：**
 
-## topic 设计
+```c++
+namespace Led {
+int led_pin = D5;
+int led_state = LOW;
+int btn_pin = D6;
 
-> **base**指的是每一个 topic 的共同前缀，我们用一个随机 6 位字符串作为 base 的值。
+int get()
+{
+    return led_state;
+}
 
----
+void set(int val)
+{
+    led_state = val ? HIGH : LOW;
+    digitalWrite(led_pin, led_state);
+}
 
-### center
+void setup()
+{
+    pinMode(led_pin, OUTPUT);
+    pinMode(btn_pin, INPUT_PULLUP);
+    digitalWrite(led_pin, led_state);
+}
 
-center 对应所有传感器的控制监听终端，负责：
+void loop()
+{
+    if(btn_click(btn_pin)){
+        led_state = led_state ? LOW : HIGH;
+        set(led_state);
+    }
+}
+}
+```
 
-- 收听所有传感器的信息
-- 控制所有受控器
-- 监听 node 的存活情况
+### 2. 接入节点
 
-与之对应的 topic 为：
+```c++
+#include <MqttProvider.hpp>
+namespace Led {
+    ...........//上面写的led
+}
 
-- listen -> 负责：
-  - 所有传感器的信息传入
-  - 所有节点的存活消息检测
-- publish -> 负责：
-  - 发布所有受控器的控制消息
-  - 发布“存活检测”消息
+void setup()
+{
+    Serial.begin(115200);   //初始化串口
+    Led::setup();           //led初始化
+    Mqtt::init("WiFi SSID", "password", "Secret key");  //1. mqtt初始化
+    Mqtt::MqttNode* led_node = new Mqtt::MqttNode(Mqtt::BOOL_CONTROLLER, "灯光", "厨房", Led::get, Led::set);   //2. 添加一个节点
+    Mqtt::send_alive();     //3. 确保添加完之后同步消息
+}
 
----
+void loop()
+{
+    Led::loop();
+    Mqtt::loop();   //4. 必须添加此行，实现数据同步等重要功能
+}
+```
 
-### node
+## 支持的功能
 
-node 是指每一个节点，每块板子上有多个 node
+- 远程控制
+- 自动同步数据（物理开关也会同步到远程）
+- 存活检测
 
-- 每个 node 的共有任务
-
-  - 监听 center 的存活验证并返回存活消息
-
-节点的类型有
-
-- 传感器
-
-  - bool 传感器（比如开关，只有开和关）
-  - 数值传感器（比如温度，是一个数值在 1-1023 的区间内）
-
-- 受控器
-  - 受控器也是传感器（广义上）
-  - bool 受控器，（比如开关）
-  - 数值受控器（比如无极调灯，我们需要设置到一个范围）
-
-传感器节点和受控器节点需要负责：
-
-- 当数值变更时发布一次新的信息
-- 监听 center 的主动请求数据并返回
-
----
-
-## 消息类型
-
-消息是指发生的 message，所有的消息我们使用‘|’作为参数分隔符
-
----
-
-### 存活消息
-
-存活消息由每个 node 发送，包含自身的信息
-| 字段名称 | 作用 |
-| --------- | --------------------- |
-| nodeid | 节点 id(6 位随机字符) |
-| node type | 节点类型\* |
-| sub type| 子类型（暂时不考虑）|
-
-注：节点类型：1:bool 传感器，2:数值传感器，11：bool 控制器，12:数值控制器，子类型：1.开关 2.温度 3.湿度
-
-消息构造`nodeid|nodtype|node name|node position`
-举例：`aacude|1`表示 node aacude 一个 bool 传感器存活
-
----
-
-### 传感器上传数据
-
-由 node 发布
-
-| 字段名称    | 作用                 |
-| ----------- | -------------------- |
-| nodeid      | 节点 id              |
-| value_raw   | 节点的传感器读取数据 |
-| value_paser | 处理后的数据         |
-
-`nodeid|node type|value_raw|value_paser`
-举例：`aacude|2|246|23`
-
----
-
-### 受控器控制消息
-
-由 center 发布
-
-| 字段名称 | 作用                     |
-| -------- | ------------------------ |
-| nodeid   | node id                  |
-| value    | 设置到该数值，0-100 区间 |
-
-举例`nodeid|value`
-
-## topic 汇总
-
-- cneter
-  - base/publish/center/alive
-  - base/listen/center/alive
-- sensor
-
-  - base/listen/sensor/nodeid
-  - base/publish/sensor/nodeid
-
-  - controller(如果是受控器)
-    - base/publish/control/nodeid
-
-### alive
-
-center 负责监听和发布
-
-监听所有的存活消息，每当收到来自此 topic 的消息，执行以下步骤
-
-1. 读取消息
-2. 如果 nodeid 不存在列表里就添加否则更新
-
-每隔一段时间 center 会发送一次检测存活
-
----
-
-## 总结
-
-### 板子需要订阅的 topic 有
-
-- base/publish/center/alive
-- base/listen/sensor/nodeid（每一个 nodeid 订阅一个）
-- base/listen/controller/nodeid（每一个 nodeid 订阅一个）
-
-### center 需要订阅的 topic 有
-
-- base/listen/center/alive
-- base/listen/center/sensor
-- base/publish/sensor/nodeid
-
-举例：
-
-1. 首先 center 上线
-2. center 发布检测 alive
-3. 所有接收到的 node 全部响应
-4. center 添加回应的节点
-5. center 开始订阅
-   1. 订阅 base/publish/sensor/# 通配符匹配所有节点
-6. 如果需要单独更新某一个 node 传感器数据
-   1. 发布 base/listen/sensor/nodeid 请求更新他的数据
-   2. 接收到来自 base/publish/sensor/nodeid 的数据
-   3. 更新 center 数据
-7. 打开远程开关
-   1. 发布 base/control/nodeid 消息：nodeid|1
-   2. 监听来自 base/publish/sensor/nodeid 的消息，检测是否成功更新
-
-## 可能出现的非正常情况
-
-- alive 响应的节点数目小于 list 里面的数目
-  - 将该节点标记为失去连接
-- 发布请求更新无响应
-  - 将该节点标记为失去连接
+详细的 mqtt topic 设计可以查看[此处](./mqtt%20design.md)
