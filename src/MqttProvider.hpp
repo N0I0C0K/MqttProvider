@@ -9,10 +9,10 @@ WiFiClient wificlient;
 MqttClient mqttclient(wificlient);
 
 enum NodeType {
-    BOOL_SENSOR = 1,
-    NUM_SENSOR = 2,
-    BOOL_CONTROLLER = 11,
-    NUM_CONTROLLER = 12
+    BOOL_SENSOR = 1,        //布尔类型的传感器，此类传感器只会传回0/1
+    NUM_SENSOR = 2,         //数值类型的传感器，此类传感器会传回0-100的数字
+    BOOL_CONTROLLER = 11,   //布尔类型的控制器，此类控制器只有开/关两个状态
+    NUM_CONTROLLER = 12     //数值类型的控制器，此类控制器有0-100的状态
 };
 
 enum TopicType {
